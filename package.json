@@ -1,0 +1,12 @@
+{
+  "name": "token-analyzer",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": { "node": ">=23.6" },
+  "bin": { "token-analyzer": "./entrypoints/cli.ts" },
+  "scripts": {
+    "start": "node entrypoints/cli.ts",
+    "test": "node --test 'tests/*.test.ts'"
+  }
+}

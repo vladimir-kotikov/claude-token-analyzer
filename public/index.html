@@ -1,0 +1,331 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Claude Code usage</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+<style>
+  :root { color-scheme: dark; }
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; margin: 0; background: #0d1117; color: #e6edf3; }
+  header { padding: 16px 24px; border-bottom: 1px solid #21262d; display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+  header h1 { font-size: 18px; margin: 0; flex: 1; }
+  header .stat { font-size: 13px; color: #8b949e; }
+  header .stat b { color: #e6edf3; font-size: 16px; }
+  button { background: #21262d; color: #e6edf3; border: 1px solid #30363d; border-radius: 6px; padding: 6px 12px; cursor: pointer; font-size: 13px; }
+  button:hover { background: #30363d; }
+  main { padding: 24px; display: grid; gap: 24px; grid-template-columns: 1fr 1fr; max-width: 1400px; margin: 0 auto; }
+  .card { background: #161b22; border: 1px solid #21262d; border-radius: 8px; padding: 16px; }
+  .card.full { grid-column: 1 / -1; }
+  .card h2 { font-size: 14px; margin: 0 0 12px; color: #8b949e; text-transform: uppercase; letter-spacing: 0.04em; }
+  select { background: #0d1117; color: #e6edf3; border: 1px solid #30363d; border-radius: 6px; padding: 4px 8px; font-size: 13px; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid #21262d; }
+  th { color: #8b949e; font-weight: 600; cursor: pointer; user-select: none; white-space: nowrap; }
+  th.sorted { color: #e6edf3; }
+  td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+  tr:hover { background: #1c2128; }
+  tr[data-key] { cursor: pointer; }
+  tr.selected { background: #1f6feb33; }
+  canvas { max-height: 320px; }
+  .toggle { display: inline-flex; border: 1px solid #30363d; border-radius: 6px; overflow: hidden; margin-left: 12px; }
+  .toggle button { border: none; border-radius: 0; }
+  .toggle button.active { background: #1f6feb; }
+  #filterBar { display: none; align-items: center; gap: 12px; flex-wrap: wrap; }
+  #filterBar .clear { margin-left: auto; }
+  .chip { background: #21262d; border: 1px solid #30363d; border-radius: 999px; padding: 3px 6px 3px 10px; font-size: 12px; display: inline-flex; align-items: center; gap: 6px; }
+  .chip button { background: none; border: none; padding: 0 4px; color: #8b949e; font-size: 13px; line-height: 1; }
+  .chip button:hover { color: #f85149; background: none; }
+
+  .collapse-btn { background: none; border: none; padding: 0; color: #8b949e; font-size: 11px; cursor: pointer; width: 14px; flex-shrink: 0; }
+  .collapse-btn:hover { color: #e6edf3; background: none; }
+
+  .copy-btn {
+    background: none; border: none; padding: 0 4px; margin-left: 6px;
+    color: #6e7681; font-size: 12px; line-height: 1; cursor: pointer; opacity: 0;
+  }
+  tr:hover .copy-btn { opacity: 1; }
+  .copy-btn:hover { color: #58a6ff; background: none; }
+
+  #ratesCard input[type="number"] {
+    background: #0d1117; color: #e6edf3; border: 1px solid #30363d; border-radius: 6px;
+    padding: 4px 8px; font-size: 13px; width: 110px; text-align: right;
+    font-variant-numeric: tabular-nums;
+  }
+  #ratesCard input[type="number"]:focus { border-color: #1f6feb; outline: none; }
+  #ratesCard input.modified { border-color: #d29922; }
+
+  .info-icon {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 16px; height: 16px; border-radius: 50%; border: 1px solid #8b949e;
+    color: #8b949e; font-size: 11px; font-weight: 700; text-transform: none;
+    cursor: help; position: relative; flex-shrink: 0;
+  }
+  .info-icon:hover, .info-icon:focus { color: #e6edf3; border-color: #e6edf3; outline: none; }
+  .info-icon .tooltip-box { display: none; }
+  .info-icon:hover .tooltip-box, .info-icon:focus .tooltip-box { display: block; }
+  .info-icon .tooltip-box {
+    position: absolute; top: 22px; left: 0; z-index: 10;
+    width: 340px; background: #1c2128; border: 1px solid #30363d; border-radius: 8px;
+    padding: 12px 14px; font-size: 12px; font-weight: 400; color: #e6edf3;
+    text-transform: none; letter-spacing: normal; cursor: auto;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+  }
+  /* Icon sits at the far right of the header row — open the box leftward so it
+     doesn't overflow off the edge of the page. */
+  .info-icon .tooltip-box.tooltip-box-right { left: auto; right: 0; }
+  .info-icon .tooltip-box dt { font-weight: 600; margin-top: 8px; }
+  .info-icon .tooltip-box dt:first-child { margin-top: 0; }
+  .info-icon .tooltip-box dt .swatch { display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin-right: 6px; }
+  .info-icon .tooltip-box dd { margin: 2px 0 0; color: #8b949e; line-height: 1.4; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Claude Code usage</h1>
+  <span class="stat"><span id="statPeriod" style="color:#e6edf3;">all time</span> · total <b id="statTotal">–</b></span>
+  <span class="stat">messages <b id="statMessages">–</b></span>
+  <span class="stat">sessions <b id="statSessions">–</b></span>
+  <span class="stat" id="statAsOf"></span>
+  <button id="copyLinkBtn" title="Copy a link to the current view">🔗 Copy link</button>
+  <button id="refreshBtn">Refresh data</button>
+</header>
+<main>
+  <div class="card full" id="ratesCard">
+    <details id="ratesDetails">
+      <summary style="cursor:pointer;color:#8b949e;font-size:14px;font-weight:600;text-transform:uppercase;letter-spacing:0.04em;">
+        Options <span id="ratesSummary" style="text-transform:none;font-weight:400;color:#e6edf3;"></span>
+      </summary>
+      <div style="margin-top:12px;">
+        <div style="color:#8b949e;font-size:13px;font-weight:600;text-transform:uppercase;letter-spacing:0.04em;margin-bottom:8px;">Pricing ($ per million tokens)</div>
+        <p style="margin:0 0 12px;color:#8b949e;font-size:12px;max-width:860px;">
+          All costs on this page are computed from the real token counts in your session
+          transcripts using these rates — transcripts never contain dollar amounts. Flat rate
+          per model (no context-size tiering). Defaults are Anthropic's published list rates;
+          replace any of them with your actual corporate rates.
+        </p>
+        <div id="ratesTables"></div>
+
+        <div style="color:#8b949e;font-size:13px;font-weight:600;text-transform:uppercase;letter-spacing:0.04em;margin:20px 0 8px;">Session health thresholds ($/turn average)</div>
+        <p style="margin:0 0 12px;color:#8b949e;font-size:12px;max-width:860px;">
+          The 🟢/🟠/🔴 badge shown next to every session is its lifetime average cost per
+          turn — a long session running without compaction shows up here even if its blended
+          per-token rate still looks cheap.
+        </p>
+        <div style="margin-bottom:12px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+          <label style="color:#8b949e;font-size:13px;">🟢 healthy below</label>
+          <input type="number" step="0.01" min="0" data-health="green" />
+          <label style="color:#8b949e;font-size:13px;">🟠 elevated below</label>
+          <input type="number" step="0.01" min="0" data-health="orange" />
+          <span style="color:#8b949e;font-size:12px;">— at/above the second value is 🔴 high.</span>
+        </div>
+
+        <div style="margin-top:12px;display:flex;gap:8px;align-items:center;">
+          <button id="ratesReset">Reset to defaults</button>
+          <span style="color:#8b949e;font-size:12px;">Changes apply immediately and persist across refreshes.</span>
+        </div>
+      </div>
+    </details>
+  </div>
+
+  <div class="card full">
+    <h2 style="display:flex;align-items:center;gap:8px;">
+      <button class="collapse-btn" data-collapse="timeline" title="Collapse">▾</button>
+      <span>Spend over time <span id="timelineSubtitle" style="text-transform:none;font-weight:400;color:#e6edf3;"></span></span>
+      <span style="flex:1;"></span>
+      <span class="toggle">
+        <button id="modeDaily" class="active">Daily</button>
+        <button id="modeCumulative">Cumulative</button>
+      </span>
+      <span class="toggle">
+        <button id="unitUsd" class="active">USD</button>
+        <button id="unitTokens">Tokens</button>
+        <button id="unitTurns">Turns</button>
+      </span>
+      <span class="toggle">
+        <button id="scaleLinear" class="active">Linear</button>
+        <button id="scaleSymlog">Symlog</button>
+      </span>
+      <span class="info-icon" tabindex="0">?
+        <span class="tooltip-box tooltip-box-right">
+          <div>Each API call's usage is split into 5 token types, stacked bottom (smallest, typically) to top:</div>
+          <dl>
+            <dt><span class="swatch" style="background:#58a6ff"></span>input</dt>
+            <dd>Fresh, uncached prompt tokens sent this turn. Usually near-zero once a conversation is warmed up — most of the prompt is served from cache instead.</dd>
+            <dt><span class="swatch" style="background:#f85149"></span>output</dt>
+            <dd>Tokens the model generated this turn, including extended-thinking/reasoning tokens (not just the visible reply text).</dd>
+            <dt><span class="swatch" style="background:#e3b341"></span>cache write (5m)</dt>
+            <dd>Prompt tokens newly written into the 5-minute ephemeral cache — billed higher than a cache read, cheaper than fresh input.</dd>
+            <dt><span class="swatch" style="background:#d29922"></span>cache write (1h)</dt>
+            <dd>Same as above, but written to the 1-hour cache tier (costs more per token than the 5m tier, lasts longer).</dd>
+            <dt><span class="swatch" style="background:#3fb950"></span>cache read</dt>
+            <dd>Prompt tokens served from a previous cache write — the cheapest tier, but usually the largest volume since the whole growing conversation gets re-read every turn.</dd>
+          </dl>
+          <div style="margin-top:10px;">
+            <b>Daily</b> = each day's own spend. <b>Cumulative</b> = running total, resets to 0 at the start of the selected month.
+            <b>USD/Tokens/Turns</b> switches what's measured; <b>Linear/Symlog</b> switches the y-axis scale (symlog helps when cache read dwarfs the other series).
+          </div>
+        </span>
+      </span>
+    </h2>
+    <div data-body="timeline"><canvas id="timelineChart"></canvas></div>
+  </div>
+
+  <div class="card full">
+    <h2 style="display:flex;align-items:center;gap:8px;">
+      <button class="collapse-btn" data-collapse="healthTimeline" title="Collapse">▾</button>
+      <span>Sessions by health <span id="healthTimelineSubtitle" style="text-transform:none;font-weight:400;color:#e6edf3;"></span></span>
+      <span style="flex:1;"></span>
+      <span class="info-icon" tabindex="0">?
+        <span class="tooltip-box tooltip-box-right">
+          <div>Count of distinct sessions active each day, bucketed by that session's lifetime health tier (same badge as the session tables):</div>
+          <dl>
+            <dt><span class="swatch" style="background:#3fb950"></span>healthy</dt><dd>&lt; $0.10/turn average.</dd>
+            <dt><span class="swatch" style="background:#d29922"></span>elevated</dt><dd>$0.10–0.25/turn average.</dd>
+            <dt><span class="swatch" style="background:#f85149"></span>high</dt><dd>&gt;= $0.25/turn average — usually a long session running without compaction.</dd>
+          </dl>
+          <div style="margin-top:10px;">A session active across multiple days counts once per day it touched, always under its one overall tier. Daily only — no cumulative mode, since summing a repeating session's daily count wouldn't mean "total unique sessions".</div>
+        </span>
+      </span>
+    </h2>
+    <div data-body="healthTimeline"><canvas id="healthTimelineChart"></canvas></div>
+  </div>
+
+  <div class="card full" id="filterBar">
+    <span id="filterChips"></span>
+    <span id="filterSummary" style="color:#8b949e;font-size:13px;"></span>
+    <button class="clear" id="clearAllBtn">Clear all ×</button>
+  </div>
+
+  <div class="card full" id="sessionDetailCard" style="display:none;">
+    <h2 style="display:flex;align-items:center;gap:8px;">
+      <button class="collapse-btn" data-collapse="sessionDetail" title="Collapse">▾</button>
+      <span>Session detail <span id="sessionDetailSubtitle" style="text-transform:none;font-weight:400;color:#e6edf3;"></span></span>
+      <span class="info-icon" tabindex="0">?
+        <span class="tooltip-box">
+          <div>Each point is one assistant turn (one API call) in this session, in order — not a calendar day. Hover a point to see its timestamp and which tools it called. Uses the same USD/Tokens unit and Linear/Symlog scale as the chart above.</div>
+        </span>
+      </span>
+      <span style="flex:1;"></span>
+      <span class="toggle">
+        <button id="sessionDetailPerTurn" class="active">Per-turn</button>
+        <button id="sessionDetailCumulative">Cumulative</button>
+      </span>
+      <span class="toggle">
+        <button id="sessionUnitUsd" class="active">USD</button>
+        <button id="sessionUnitTokens">Tokens</button>
+      </span>
+      <span class="toggle">
+        <button id="sessionThreadAll" class="active">+ subagents</button>
+        <button id="sessionThreadMain">Main only</button>
+      </span>
+      <span class="toggle" id="sessionLinkModeToggle">
+        <button id="sessionLinkGrafted" class="active">Grafted</button>
+        <button id="sessionLinkStacked">Stacked</button>
+      </span>
+    </h2>
+    <div data-body="sessionDetail"><canvas id="sessionDetailChart"></canvas></div>
+  </div>
+
+  <div class="card">
+    <h2 style="display:flex;align-items:center;gap:8px;">
+      <button class="collapse-btn" data-collapse="group" title="Collapse">▾</button>
+      <span>Spend by <select id="groupBySelect">
+        <option value="sessionId">session</option>
+        <option value="project">project</option>
+        <option value="effort">effort</option>
+        <option value="sessionKind">session kind (bg/fg)</option>
+        <option value="model">model</option>
+        <option value="date">day</option>
+      </select> <span id="groupTableNote" style="text-transform:none;font-weight:400;color:#8b949e;font-size:12px;"></span></span>
+      <span style="flex:1;"></span>
+      <span class="toggle" id="groupLinkedToggle">
+        <button id="groupLinkedOn" class="active">🔗 Group linked</button>
+        <button id="groupLinkedOff">Flat</button>
+      </span>
+      <select id="monthSelect"><option value="">All time</option></select>
+      <span class="info-icon" tabindex="0">?
+        <span class="tooltip-box">
+          <dl>
+            <dt>key</dt><dd>the value of whichever dimension you're grouping by above.</dd>
+            <dt>$</dt><dd>total cost for that group, within the current filters/month.</dd>
+            <dt>tokens</dt><dd>total tokens (all 5 types combined) for that group.</dd>
+            <dt>turns</dt><dd>number of assistant API calls in that group.</dd>
+            <dt>$/turn</dt><dd>average cost per call — high values usually mean large cache reads per call, not call volume.</dd>
+            <dt>🔗 Group linked</dt><dd>when grouping by session: sessions whose transcript shares history with another (resumed/forked into a new session id) collapse into one cumulative row — click ▸ to expand into the individual "main" and "dependant" sessions. Detected by exact transcript-line reuse, not inferred — collisions at that precision are effectively impossible by chance.</dd>
+          </dl>
+        </span>
+      </span>
+    </h2>
+    <div data-body="group"><table id="groupTable"><thead><tr>
+      <th data-col="key" data-default-dir="asc">key</th>
+      <th class="num" data-col="cost" data-default-dir="desc">$</th>
+      <th class="num" data-col="tokens" data-default-dir="desc">tokens</th>
+      <th class="num" data-col="turns" data-default-dir="desc">turns</th>
+      <th class="num" data-col="perTurn" data-default-dir="desc">$/turn</th>
+    </tr></thead><tbody></tbody></table></div>
+  </div>
+
+  <div class="card">
+    <h2 style="display:flex;align-items:center;gap:8px;">
+      <button class="collapse-btn" data-collapse="tool" title="Collapse">▾</button>
+      <span>Tool output volume (bytes injected into context)</span>
+      <span class="info-icon" tabindex="0">?
+        <span class="tooltip-box">
+          <dl>
+            <dt>tool</dt><dd>name of the tool or MCP server called (e.g. Bash, Read, mcp__...).</dd>
+            <dt>calls</dt><dd>how many times this tool was invoked.</dd>
+            <dt>bytes</dt><dd>total size of that tool's results fed back into the model's context, across all calls.</dd>
+            <dt>est. tokens</dt><dd>bytes ÷ 2.18 — the API never reports per-tool-result token counts, so this is an estimate. The 2.18 bytes/token ratio was measured from this dataset (1,989 turns whose only new context was a single tool result, comparing its byte size to that turn's cache-write tokens); denser than the ~4 chars/token prose rule because tool output is code, JSON and logs.</dd>
+            <dt>avg tokens</dt><dd>est. tokens ÷ calls — a large average means each call injects a lot of context; candidates for trimming (tail/grep piping, ranged file reads, narrower MCP queries).</dd>
+          </dl>
+        </span>
+      </span>
+    </h2>
+    <div data-body="tool"><table id="toolTable"><thead><tr>
+      <th data-col="key" data-default-dir="asc">tool</th>
+      <th class="num" data-col="calls" data-default-dir="desc">calls</th>
+      <th class="num" data-col="bytes" data-default-dir="desc">bytes</th>
+      <th class="num" data-col="tokens" data-default-dir="desc">est. tokens</th>
+      <th class="num" data-col="avgTokens" data-default-dir="desc">avg tokens</th>
+    </tr></thead><tbody></tbody></table></div>
+  </div>
+
+  <div class="card full">
+    <h2 style="display:flex;align-items:center;gap:8px;">
+      <button class="collapse-btn" data-collapse="session" title="Collapse">▾</button>
+      <span>Top sessions</span>
+      <span class="info-icon" tabindex="0">?
+        <span class="tooltip-box">
+          <dl>
+            <dt>session</dt><dd>session ID — click the row to filter the whole page to just this session.</dd>
+            <dt>project</dt><dd>working directory the session ran in.</dd>
+            <dt>turns</dt><dd>number of assistant API calls in this session.</dd>
+            <dt>tokens</dt><dd>total tokens (all 5 types combined) across the session.</dd>
+            <dt>tokens/turn</dt><dd>tokens ÷ turns — the key diagnostic. High = each call re-reads a large/growing context, often one long-running session that never got compacted or restarted. Many turns with a <i>low</i> tokens/turn means the cost is volume (lots of cheap calls), not one bloated call.</dd>
+            <dt>days span</dt><dd>calendar days between the session's first and last turn. A session spanning many days is usually a resumed/background job whose context kept growing turn over turn.</dd>
+            <dt>$ input / $ cache write / $ cache read / $ output</dt><dd>cost breakdown by token type — see the chart's own "?" for what each means.</dd>
+            <dt>$ total</dt><dd>sum of the four cost columns above.</dd>
+          </dl>
+        </span>
+      </span>
+    </h2>
+    <div data-body="session"><table id="sessionTable"><thead>
+      <tr>
+        <th data-col="key" data-default-dir="asc">session</th>
+        <th data-col="project" data-default-dir="asc">project</th>
+        <th class="num" data-col="turns" data-default-dir="desc">turns</th>
+        <th class="num" data-col="tokens" data-default-dir="desc">tokens</th>
+        <th class="num" data-col="tokensPerTurn" data-default-dir="desc">tokens/turn</th>
+        <th class="num" data-col="days" data-default-dir="desc">days span</th>
+        <th class="num" data-col="input" data-default-dir="desc">$ input</th>
+        <th class="num" data-col="cacheWrite" data-default-dir="desc">$ cache write</th>
+        <th class="num" data-col="cacheRead" data-default-dir="desc">$ cache read</th>
+        <th class="num" data-col="output" data-default-dir="desc">$ output</th>
+        <th class="num" data-col="total" data-default-dir="desc">$ total</th>
+      </tr>
+    </thead><tbody></tbody></table></div>
+  </div>
+</main>
+<script src="app.js"></script>
+</body>
+</html>
